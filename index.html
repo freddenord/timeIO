@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="timeIO">
+<meta name="theme-color" content="#0b0d0b">
+<title>timeIO</title>
+<style>
+:root{--bg:#0b0d0b;--panel:#131713;--line:#22291f;--text:#d8e6d2;--dim:#6f7d69;--led:#39ff88;--amber:#ffb000;--red:#ff4d4d}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+body{min-height:100vh;padding-top:env(safe-area-inset-top);padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.logo{font:700 18px ui-monospace,Menlo,monospace;letter-spacing:.08em}
+.logo b{color:var(--led);text-shadow:0 0 8px rgba(57,255,136,.6);font-weight:700}
+.leds{display:flex;gap:4px}
+.led{width:8px;height:8px;border-radius:50%;background:#1d2a1d;box-shadow:inset 0 0 2px #000}
+.led.on{background:var(--led);box-shadow:0 0 6px var(--led)}
+.led.blink{animation:blink 1.6s steps(2) infinite}
+.led.blink:nth-child(3n){animation-delay:.4s}
+@keyframes blink{50%{opacity:.2}}
+main{padding:16px;max-width:560px;margin:0 auto}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:560px;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;padding:14px 0 16px;background:none;border:0;color:var(--dim);font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;transition:color .15s}
+nav button:active{transform:scale(.94)}
+nav button.active{color:var(--led);text-shadow:0 0 8px rgba(57,255,136,.6)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+h3{margin:0 0 12px;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--dim);text-transform:uppercase}
+label{display:block;margin-bottom:10px}
+label>span{font-size:12px;color:var(--dim)}
+input,select{width:100%;background:#0d100d;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:11px;font:16px system-ui;margin-top:4px;transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--led)}
+.btn{background:#1a201a;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font:600 15px system-ui;cursor:pointer;transition:transform .08s,box-shadow .15s,background .15s}
+.btn:hover{background:#222b22;box-shadow:0 0 0 1px var(--led)}
+.btn:active{transform:scale(.96);background:#2a352a}
+.btn.primary{background:var(--led);color:#06210f;border-color:var(--led)}
+.btn.primary:hover{background:#5dffa0;box-shadow:0 0 14px rgba(57,255,136,.6)}
+.btn.primary:active{background:#2bd670}
+.btn.danger{color:var(--red);border-color:#4a1d1d}
+.btn.danger:hover{box-shadow:0 0 0 1px var(--red)}
+.btn.wide{width:100%;margin-top:12px}
+.link{background:none;border:0;color:var(--led);font:12px ui-monospace,Menlo,monospace;padding:4px 0;cursor:pointer}
+.link:hover{text-decoration:underline}
+.link:active{opacity:.5}
+.link.danger{color:var(--red)}
+.clock{font:700 56px ui-monospace,Menlo,monospace;text-align:center;color:var(--led);text-shadow:0 0 14px rgba(57,255,136,.35);margin:10px 0 4px;letter-spacing:.02em}
+.dim{color:var(--dim);font-size:13px}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.center{text-align:center}
+.bar{height:6px;background:#1a211a;border-radius:3px;overflow:hidden;margin-top:10px}
+.bar>i{display:block;height:100%;width:0;background:var(--led);transition:width .5s}
+.row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.dayhead{color:var(--led);font:12px ui-monospace,Menlo,monospace;letter-spacing:.08em;margin:18px 0 4px;opacity:.85}
+.tag{font:10px ui-monospace,Menlo,monospace;border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--dim);margin-left:4px}
+.tag.amber{color:var(--amber);border-color:#5a4300}
+.total{display:flex;justify-content:space-between;font:600 15px ui-monospace,Menlo,monospace;padding:12px 0 0;color:var(--led)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 4px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.actions .btn{flex:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
+.modal.show{display:flex}
+.modal .panel{width:100%;max-width:360px;border-color:var(--amber);box-shadow:0 0 24px rgba(255,176,0,.25)}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">time<b>IO</b></span>
+  <div class="leds" id="leds"></div>
+  <span class="dim mono" id="statusText" style="margin-left:auto"></span>
+</header>
+
+<main>
+
+  <section data-tab="timer">
+    <div class="panel">
+      <h3>Timer</h3>
+      <label><span>Task</span>
+        <select id="timerTask"></select>
+      </label>
+      <label><span>Project</span>
+        <select id="timerProject"></select>
+      </label>
+      <label><span>Note (optional)</span>
+        <input id="timerNote" placeholder="e.g. Client meeting, grading">
+      </label>
+      <div class="clock" id="clock">00:00:00</div>
+      <div class="dim center" id="timerInfo">Idle</div>
+      <div class="bar"><i id="nextBar"></i></div>
+      <div class="dim center mono" id="nextInfo" style="margin-top:6px"></div>
+      <button class="btn primary wide" id="startBtn">Start timer</button>
+    </div>
+
+    <div class="panel">
+      <h3>Manual entry</h3>
+      <label><span>Date</span><input type="date" id="manualDate"></label>
+      <label><span>Task</span><select id="manualTask"></select></label>
+      <label><span>Project</span><select id="manualProject"></select></label>
+      <label><span>Hours (1.5 or 1:30)</span><input id="manualHours" inputmode="decimal" placeholder="1.5"></label>
+      <label><span>Note</span><input id="manualNote" placeholder="What did you do?"></label>
+      <button class="btn wide" id="addManual">Add to log</button>
+    </div>
+  </section>
+
+  <section data-tab="log" hidden>
+    <div class="panel">
+      <h3>Filter</h3>
+      <label><span>Project</span><select id="logProject"></select></label>
+      <label><span>Task</span><select id="logTask"></select></label>
+      <label><span>Month</span><input type="month" id="logMonth"></label>
+      <div class="total"><span>Total</span><span id="logTotal"></span></div>
+    </div>
+    <div class="panel" style="padding-top:8px">
+      <div id="logList"></div>
+    </div>
+  </section>
+
+  <section data-tab="invoice" hidden>
+    <div class="panel">
+      <h3>Invoice summary</h3>
+      <label><span>Project</span><select id="invProject"></select></label>
+      <label><span>Period</span><input type="month" id="invMonth"></label>
+      <table>
+        <thead><tr><th>Project</th><th>Hours</th><th>To invoice (h)</th><th>To invoice</th></tr></thead>
+        <tbody id="invBody"></tbody>
+      </table>
+      <div class="actions">
+        <button class="btn" id="markBilled">Mark shown as invoiced</button>
+        <button class="btn primary" id="exportCsv">Export CSV</button>
+      </div>
+      <p class="dim" style="margin-bottom:0">CSV opens in Excel and Numbers. Columns use semicolons and decimal commas, the Swedish default.</p>
+    </div>
+  </section>
+
+  <section data-tab="projects" hidden>
+    <div class="panel">
+      <h3 id="projFormTitle">New project</h3>
+      <label><span>Project name</span><input id="projName" placeholder="Project name"></label>
+      <label><span>Client</span><input id="projClient" placeholder="Client name"></label>
+      <label><span>Hourly rate</span><input id="projRate" inputmode="decimal" placeholder="0"></label>
+      <div class="actions">
+        <button class="btn" id="cancelProject" hidden>Cancel</button>
+        <button class="btn primary" id="saveProject">Add project</button>
+      </div>
+    </div>
+
+    <div class="panel" style="padding-top:8px">
+      <h3>Projects</h3>
+      <div id="projList"></div>
+    </div>
+
+    <div class="panel" style="padding-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <h3 style="margin:0">Tasks</h3>
+        <button class="link" id="taskEditToggle">edit</button>
+      </div>
+      <div style="display:flex;gap:8px;margin:12px 0">
+        <input id="newTask" placeholder="New task name" style="flex:1">
+        <button class="btn primary" id="addTask">Add</button>
+      </div>
+      <div id="taskList"></div>
+      <p class="dim">Tasks appear in the dropdown in this order. Deleting a task keeps its name on past entries.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Settings</h3>
+      <label><span>Check-in reminder every</span>
+        <select id="setInterval">
+          <option value="0">Off</option>
+          <option value="30">30 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="90">90 minutes</option>
+          <option value="120">120 minutes</option>
+        </select>
+      </label>
+      <label><span>Currency</span><input id="setCurrency" maxlength="6"></label>
+      <div class="actions">
+        <button class="btn" id="backup">Download backup</button>
+      </div>
+      <p class="dim">Data lives on this phone. Download a backup now and then.</p>
+    </div>
+  </section>
+
+</main>
+
+<nav>
+  <button data-tab="timer" class="active">Timer</button>
+  <button data-tab="log">Log</button>
+  <button data-tab="invoice">Invoice</button>
+  <button data-tab="projects">Projects</button>
+</nav>
+
+<div class="modal" id="prompt">
+  <div class="panel">
+    <div class="dim mono">CHECK-IN</div>
+    <h2 id="promptText" style="margin:6px 0 4px;font-size:22px">Still working?</h2>
+    <div class="dim mono" id="promptCount"></div>
+    <div class="actions">
+      <button class="btn primary" id="promptYes">Yes, keep going</button>
+      <button class="btn danger" id="promptStop">Stop</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = 'timeio.v1';
+const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
+const $ = id => document.getElementById(id);
+
+// ---------- data ----------
+const DEFAULT_TASKS = ['Meeting', 'Breakdown', 'Recce', 'On-set', 'Prep', 'Planning', 'Travel', 'Asset building', 'GenAI', 'Grading', 'Review'];
+function freshState() {
+  return { projects: [], entries: [], tasks: DEFAULT_TASKS.slice(), running: null, settings: { interval: 60, currency: 'SEK' } };
+}
+let state;
+try { state = Object.assign(freshState(), JSON.parse(localStorage.getItem(KEY)) || {}); }
+catch (e) { state = freshState(); }
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+// ---------- helpers ----------
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const hms = s => { s = Math.max(0, Math.round(s)); return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`; };
+const hm = s => { const m = Math.round(s / 60); return `${Math.floor(m / 60)}h ${pad(m % 60)}m`; };
+const money = n => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + state.settings.currency;
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const projectById = id => state.projects.find(p => p.id === id);
+function parseHours(s) {
+  s = String(s).trim().replace(',', '.');
+  if (!s) return 0;
+  if (s.includes(':')) { const [h, m] = s.split(':'); return Math.round((+h || 0) * 3600 + (+m || 0) * 60); }
+  const v = parseFloat(s); return v > 0 ? Math.round(v * 3600) : 0;
+}
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function notify(body) {
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') new Notification('timeIO', { body });
+  } catch (e) {}
+}
+
+// ---------- tabs ----------
+function showTab(name) {
+  document.querySelectorAll('section[data-tab]').forEach(s => s.hidden = s.dataset.tab !== name);
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  render();
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- timer ----------
+function startTimer() {
+  const pid = $('timerProject').value;
+  if (!pid) { alert('Add a project first in the Projects tab.'); return; }
+  const now = Date.now();
+  state.running = {
+    projectId: pid,
+    task: $('timerTask').value,
+    note: $('timerNote').value.trim(),
+    startedAt: now,
+    nextCheck: now + state.settings.interval * 60000,
+    promptAt: null
+  };
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+  save(); render();
+}
+
+function stopTimer(endMs, auto) {
+  const r = state.running; if (!r) return;
+  const seconds = Math.max(1, Math.round((endMs - r.startedAt) / 1000));
+  const start = new Date(r.startedAt);
+  state.entries.push({
+    id: uid(), projectId: r.projectId, task: r.task || '', date: ymd(start),
+    start: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    seconds, note: r.note, invoiced: false, auto
+  });
+  state.running = null;
+  save(); hidePrompt(); render();
+}
+
+function showPrompt() {
+  const r = state.running; const p = projectById(r.projectId);
+  $('promptText').textContent = 'Still working on ' + (p ? p.name : 'this project') + '?';
+  $('promptCount').textContent = 'Stops automatically in ' + hms((r.promptAt + GRACE - Date.now()) / 1000).slice(3);
+  $('prompt').classList.add('show');
+}
+function hidePrompt() { $('prompt').classList.remove('show'); }
+
+function tick() {
+  const r = state.running;
+  if (r) {
+    const now = Date.now();
+    if (r.promptAt) {
+      if (now >= r.promptAt + GRACE) stopTimer(r.promptAt, true);   // no answer: stop at the check-in time
+      else showPrompt();
+    } else if (state.settings.interval > 0 && now >= r.nextCheck) {
+      r.promptAt = r.nextCheck; save();
+      showPrompt();
+      notify('Still working on ' + ((projectById(r.projectId) || {}).name || 'this project') + '?');
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+  }
+  renderTimer();
+}
+
+function renderTimer() {
+  const r = state.running;
+  const btn = $('startBtn');
+  const interval = state.settings.interval;
+  if (r) {
+    const now = Date.now();
+    const p = projectById(r.projectId);
+    $('clock').textContent = hms((now - r.startedAt) / 1000);
+    $('timerInfo').textContent = 'Running · ' + (r.task ? r.task + ' · ' : '') + (p ? p.name : '(deleted project)') + (r.note ? ' · ' + r.note : '');
+    btn.textContent = 'Stop timer'; btn.className = 'btn danger wide';
+    $('timerProject').disabled = true; $('timerNote').disabled = true; $('timerTask').disabled = true;
+    if (interval > 0 && !r.promptAt) {
+      const left = (r.nextCheck - now) / 1000, total = interval * 60;
+      $('nextBar').style.width = Math.max(0, Math.min(100, 100 * (1 - left / total))) + '%';
+      $('nextInfo').textContent = 'Next check-in in ' + hms(left);
+    } else {
+      $('nextBar').style.width = r.promptAt ? '100%' : '0%';
+      $('nextInfo').textContent = interval > 0 ? 'Waiting for your answer' : 'Check-ins off';
+    }
+    $('statusText').textContent = 'REC';
+  } else {
+    $('clock').textContent = '00:00:00';
+    $('timerInfo').textContent = 'Idle';
+    $('nextBar').style.width = '0%';
+    $('nextInfo').textContent = interval > 0 ? 'Check-in every ' + interval + ' min' : 'Check-ins off';
+    btn.textContent = 'Start timer'; btn.className = 'btn primary wide';
+    $('timerProject').disabled = false; $('timerNote').disabled = false; $('timerTask').disabled = false;
+    $('statusText').textContent = '';
+  }
+  document.querySelectorAll('.led').forEach((l, i) => l.classList.toggle('on', !!r && i % 2 === 0));
+}
+
+$('startBtn').onclick = () => state.running ? stopTimer(Date.now(), false) : startTimer();
+$('promptYes').onclick = () => {
+  const r = state.running; if (!r) return hidePrompt();
+  r.promptAt = null; r.nextCheck = Date.now() + state.settings.interval * 60000;
+  save(); hidePrompt(); renderTimer();
+};
+$('promptStop').onclick = () => stopTimer(Date.now(), false);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+
+// ---------- manual entry ----------
+$('addManual').onclick = () => {
+  const pid = $('manualProject').value, date = $('manualDate').value;
+  const secs = parseHours($('manualHours').value);
+  if (!pid) return alert('Add a project first.');
+  if (!date) return alert('Pick a date.');
+  if (!secs) return alert('Enter hours, e.g. 1.5 or 1:30.');
+  state.entries.push({ id: uid(), projectId: pid, task: $('manualTask').value, date, start: '', seconds: secs, note: $('manualNote').value.trim(), invoiced: false, auto: false, manual: true });
+  save();
+  $('manualHours').value = ''; $('manualNote').value = '';
+  render();
+};
+
+// ---------- log ----------
+function filteredEntries(scope) {
+  const pid = $(scope === 'log' ? 'logProject' : 'invProject').value;
+  const month = $(scope === 'log' ? 'logMonth' : 'invMonth').value;
+  const task = scope === 'log' ? $('logTask').value : '';
+  return state.entries.filter(e => (!pid || e.projectId === pid) && (!task || e.task === task) && (!month || e.date.startsWith(month)));
+}
+function renderLog() {
+  const list = filteredEntries('log').sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
+  let secs = 0, amt = 0, html = '', lastDate = '';
+  list.forEach(e => {
+    const p = projectById(e.projectId);
+    secs += e.seconds; amt += e.seconds / 3600 * ((p && p.rate) || 0);
+    if (e.date !== lastDate) { html += `<div class="dayhead">${e.date}</div>`; lastDate = e.date; }
+    html += `<div class="row">
+      <div style="min-width:0">
+        <div>${esc(p ? p.name : '(deleted project)')}${e.auto ? '<span class="tag amber">auto-stopped</span>' : ''}${e.manual ? '<span class="tag">manual</span>' : ''}</div>
+        <div class="dim">${e.task ? esc(e.task) + ' · ' : ''}${e.start ? e.start + ' · ' : ''}${esc(e.note)}</div>
+      </div>
+      <div style="text-align:right;white-space:nowrap">
+        <div class="mono">${hm(e.seconds)}</div>
+        <button class="link" data-bill="${e.id}">${e.invoiced ? '✓ invoiced' : 'mark invoiced'}</button><br>
+        <button class="link danger" data-del="${e.id}">delete</button>
+      </div>
+    </div>`;
+  });
+  $('logList').innerHTML = html || '<p class="dim">No entries yet.</p>';
+  $('logTotal').textContent = hm(secs) + ' · ' + money(amt);
+}
+$('logList').onclick = e => {
+  const bill = e.target.dataset.bill, del = e.target.dataset.del;
+  if (bill) { const x = state.entries.find(v => v.id === bill); x.invoiced = !x.invoiced; save(); render(); }
+  if (del && confirm('Delete this entry?')) { state.entries = state.entries.filter(v => v.id !== del); save(); render(); }
+};
+$('logProject').onchange = $('logMonth').onchange = render;
+
+// ---------- invoice ----------
+function renderInvoice() {
+  const groups = {};
+  filteredEntries('inv').forEach(e => {
+    const p = projectById(e.projectId) || { name: '(deleted project)', rate: 0 };
+    const g = groups[e.projectId] = groups[e.projectId] || { name: p.name, rate: p.rate || 0, secs: 0, unSecs: 0 };
+    g.secs += e.seconds;
+    if (!e.invoiced) g.unSecs += e.seconds;
+  });
+  let tot = { secs: 0, unSecs: 0, unAmt: 0 };
+  const rows = Object.values(groups).map(g => {
+    const unAmt = g.unSecs / 3600 * g.rate;
+    tot.secs += g.secs; tot.unSecs += g.unSecs; tot.unAmt += unAmt;
+    return `<tr><td>${esc(g.name)}</td><td class="mono">${(g.secs / 3600).toFixed(2)}</td><td class="mono">${(g.unSecs / 3600).toFixed(2)}</td><td class="mono">${money(unAmt)}</td></tr>`;
+  });
+  rows.push(`<tr><td><b>Total</b></td><td class="mono"><b>${(tot.secs / 3600).toFixed(2)}</b></td><td class="mono"><b>${(tot.unSecs / 3600).toFixed(2)}</b></td><td class="mono"><b>${money(tot.unAmt)}</b></td></tr>`);
+  $('invBody').innerHTML = rows.join('');
+}
+$('invProject').onchange = $('invMonth').onchange = render;
+$('markBilled').onclick = () => {
+  const l = filteredEntries('inv').filter(e => !e.invoiced);
+  if (!l.length) return alert('Nothing unbilled in this view.');
+  if (!confirm(`Mark ${l.length} entries as invoiced?`)) return;
+  l.forEach(e => e.invoiced = true); save(); render();
+};
+$('exportCsv').onclick = () => {
+  const list = filteredEntries('inv').sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  if (!list.length) return alert('Nothing to export in this view.');
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const dec = n => n.toFixed(2).replace('.', ',');
+  const rows = [['Date', 'Project', 'Client', 'Task', 'Start', 'Hours', 'Rate', 'Amount', 'Note', 'Invoiced'].map(q).join(';')];
+  list.forEach(e => {
+    const p = projectById(e.projectId) || {}, h = e.seconds / 3600, rate = p.rate || 0;
+    rows.push([e.date, p.name || '(deleted)', p.client || '', e.task || '', e.start || '', dec(h), dec(rate), dec(h * rate), e.note, e.invoiced ? 'yes' : 'no'].map(q).join(';'));
+  });
+  const pid = $('invProject').value, month = $('invMonth').value;
+  const pname = pid && projectById(pid) ? '-' + projectById(pid).name.replace(/\W+/g, '_') : '';
+  download(new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `timeio-${month || 'all'}${pname}.csv`);
+};
+
+// ---------- projects ----------
+let editingId = null;
+function clearProjectForm() {
+  editingId = null;
+  ['projName', 'projClient', 'projRate'].forEach(id => $(id).value = '');
+  $('projFormTitle').textContent = 'New project';
+  $('saveProject').textContent = 'Add project';
+  $('cancelProject').hidden = true;
+}
+$('saveProject').onclick = () => {
+  const name = $('projName').value.trim();
+  if (!name) return alert('Name the project.');
+  const data = { name, client: $('projClient').value.trim(), rate: parseFloat(String($('projRate').value).replace(',', '.')) || 0 };
+  if (editingId) Object.assign(projectById(editingId), data);
+  else state.projects.push(Object.assign({ id: uid() }, data));
+  save(); clearProjectForm(); render();
+};
+$('cancelProject').onclick = clearProjectForm;
+function renderProjects() {
+  $('projList').innerHTML = state.projects.map(p => {
+    const n = state.entries.filter(e => e.projectId === p.id).length;
+    return `<div class="row">
+      <div><div>${esc(p.name)}</div>
+      <div class="dim">${esc(p.client)} · ${p.rate ? p.rate + ' ' + state.settings.currency + '/h' : 'no rate'} · ${n} entries</div></div>
+      <div style="white-space:nowrap"><button class="link" data-edit="${p.id}">edit</button> <button class="link danger" data-pdel="${p.id}">delete</button></div>
+    </div>`;
+  }).join('') || '<p class="dim">No projects yet.</p>';
+}
+$('projList').onclick = e => {
+  const ed = e.target.dataset.edit, del = e.target.dataset.pdel;
+  if (ed) {
+    const p = projectById(ed);
+    editingId = ed;
+    $('projName').value = p.name; $('projClient').value = p.client; $('projRate').value = p.rate || '';
+    $('projFormTitle').textContent = 'Edit project';
+    $('saveProject').textContent = 'Save changes';
+    $('cancelProject').hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  if (del) {
+    const n = state.entries.filter(x => x.projectId === del).length;
+    if (n) return alert(`This project has ${n} entries. Keep it so your invoice history stays complete.`);
+    if (state.running && state.running.projectId === del) return alert('Stop the timer first.');
+    if (confirm('Delete this project?')) { state.projects = state.projects.filter(p => p.id !== del); save(); render(); }
+  }
+};
+
+// ---------- settings ----------
+$('setInterval').onchange = e => { state.settings.interval = +e.target.value; save(); render(); };
+$('setCurrency').onchange = e => { state.settings.currency = e.target.value.trim() || 'SEK'; save(); render(); };
+$('backup').onclick = () => download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }), `timeio-backup-${ymd(new Date())}.json`);
+
+// ---------- tasks ----------
+let taskEdit = false;
+function addTask(name) {
+  name = (name || '').trim();
+  if (!name) return null;
+  const existing = state.tasks.find(t => t.toLowerCase() === name.toLowerCase());
+  if (existing) return existing;
+  state.tasks.push(name); save();
+  return name;
+}
+function onTaskSelect(sel) {
+  if (sel.value !== '__new__') { sel.dataset.last = sel.value; return; }
+  const added = addTask(prompt('New task name:'));
+  if (added) sel.dataset.last = added;
+  render();
+}
+function moveTask(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= state.tasks.length) return;
+  [state.tasks[i], state.tasks[j]] = [state.tasks[j], state.tasks[i]];
+  save(); render();
+}
+function renderTasks() {
+  $('taskEditToggle').textContent = taskEdit ? 'done' : 'edit';
+  $('taskList').innerHTML = state.tasks.map((t, i) => `<div class="row" style="align-items:center">
+      <span>${esc(t)}</span>
+      ${taskEdit ? `<span style="white-space:nowrap">
+        <button class="btn" style="padding:4px 10px" data-up="${i}" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn" style="padding:4px 10px" data-down="${i}" ${i === state.tasks.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn danger" style="padding:4px 10px" data-tdel="${i}">✕</button>
+      </span>` : ''}
+    </div>`).join('') || '<p class="dim">No tasks.</p>';
+}
+$('taskEditToggle').onclick = () => { taskEdit = !taskEdit; renderTasks(); };
+$('addTask').onclick = () => { if (addTask($('newTask').value)) { $('newTask').value = ''; render(); } };
+$('newTask').onkeydown = e => { if (e.key === 'Enter') $('addTask').click(); };
+$('taskList').onclick = e => {
+  const d = e.target.dataset;
+  if (d.up !== undefined) moveTask(+d.up, -1);
+  else if (d.down !== undefined) moveTask(+d.down, 1);
+  else if (d.tdel !== undefined) {
+    const t = state.tasks[+d.tdel];
+    if (confirm(`Delete task "${t}"? Past entries keep this name.`)) { state.tasks.splice(+d.tdel, 1); save(); render(); }
+  }
+};
+$('timerTask').onchange = () => onTaskSelect($('timerTask'));
+$('manualTask').onchange = () => onTaskSelect($('manualTask'));
+$('logTask').onchange = render;
+
+// ---------- render ----------
+function fillSelects() {
+  const opts = state.projects.map(p => `<option value="${p.id}">${esc(p.name)}${p.client ? ' · ' + esc(p.client) : ''}</option>`).join('');
+  ['timerProject', 'manualProject'].forEach(id => {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = opts || '<option value="">Add a project first</option>';
+    if (cur) sel.value = cur;
+  });
+  ['logProject', 'invProject'].forEach(id => {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = '<option value="">All projects</option>' + opts;
+    if (cur) sel.value = cur;
+  });
+  const taskOpts = state.tasks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  ['timerTask', 'manualTask'].forEach(id => {
+    const sel = $(id);
+    const cur = sel.value === '__new__' ? (sel.dataset.last || '') : sel.value;
+    sel.innerHTML = taskOpts + '<option value="__new__">+ New task…</option>';
+    sel.value = state.tasks.includes(cur) ? cur : (state.tasks[0] || '__new__');
+    sel.dataset.last = sel.value;
+  });
+  const lt = $('logTask').value;
+  $('logTask').innerHTML = '<option value="">All tasks</option>' + taskOpts;
+  $('logTask').value = lt;
+  $('setInterval').value = state.settings.interval;
+  $('setCurrency').value = state.settings.currency;
+}
+function render() {
+  fillSelects(); renderTimer(); renderLog(); renderInvoice(); renderProjects(); renderTasks();
+}
+
+// ---------- init ----------
+const leds = $('leds');
+for (let i = 0; i < 6; i++) {
+  const d = document.createElement('span');
+  d.className = 'led' + (i % 2 ? ' blink' : '');
+  leds.appendChild(d);
+}
+$('manualDate').value = ymd(new Date());
+setInterval(tick, 1000);
+showTab('timer');
+tick();
+</script>
+</body>
+</html>
