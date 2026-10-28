@@ -75,6 +75,10 @@ input:focus,select:focus{outline:none;border-color:var(--led)}
 .link:hover{text-decoration:underline}
 .link:active{opacity:.5}
 .link.danger{color:var(--red)}
+/* Undo bar after deleting an entry, sits just above the bottom tab bar. */
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:16px;max-width:calc(100% - 32px);padding:10px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.6);font:12px ui-monospace,Menlo,monospace;z-index:20}
+.toast .link{font-weight:700;letter-spacing:.06em}
+@media (min-width:900px){.toast{bottom:24px}}
 .clock{font:700 56px ui-monospace,Menlo,monospace;text-align:center;color:var(--led);text-shadow:0 0 14px rgba(57,255,136,.35);margin:10px 0 4px;letter-spacing:.02em}
 .dim{color:var(--dim);font-size:13px}
 .mono{font-family:ui-monospace,Menlo,monospace}
@@ -344,7 +348,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.8.0';   // bump this when you release a change
+const APP_VERSION = '1.9.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -568,8 +572,30 @@ function renderLog() {
 $('logList').onclick = e => {
   const bill = e.target.dataset.bill, del = e.target.dataset.del;
   if (bill) { const x = state.entries.find(v => v.id === bill); x.invoiced = !x.invoiced; save(); render(); }
-  if (del && confirm('Delete this entry?')) { state.entries = state.entries.filter(v => v.id !== del); save(); render(); }
+  if (del) {
+    const gone = state.entries.find(v => v.id === del);
+    state.entries = state.entries.filter(v => v.id !== del); save(); render();
+    if (gone) offerUndo(gone);
+  }
 };
+// After a delete, show "Undo" for 10 s. The entry comes back with a new id, because sync
+// treats the old id as deleted (deletion wins) once the delete has reached the account.
+let undoTimer;
+function offerUndo(entry) {
+  let t = $('toast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'toast'; t.className = 'toast';
+    t.innerHTML = '<span>Entry deleted</span><button class="link">UNDO</button>';
+    document.body.appendChild(t);
+  }
+  t.hidden = false;
+  t.querySelector('button').onclick = () => {
+    clearTimeout(undoTimer); t.hidden = true;
+    state.entries.push(Object.assign({}, entry, { id: uid() })); save(); render();
+  };
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { t.hidden = true; }, 10000);
+}
 $('logProject').onchange = $('logMonth').onchange = render;
 
 // ---------- invoice ----------
