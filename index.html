@@ -279,7 +279,7 @@ function save() {
   localStorage.setItem(PENDING_KEY, '1');
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncNow, 1500);
-  setSync(userId ? 'Saving…' : 'Not signed in');
+  setSync(userId ? 'Saving…' : localStorage.getItem('timeio-auth') ? 'Offline – will sync' : 'Not signed in');
 }
 
 // ---------- helpers ----------
@@ -633,10 +633,27 @@ function setBase(at, s) { base = JSON.parse(JSON.stringify({ at, state: s })); l
 function setSync(text) { $('syncText').textContent = text; }
 function showLogin() { $('login').classList.add('show'); setSync('Not signed in'); }
 
+// Without internet the app keeps working on the phone copy and signs in again once online.
+let booting = false;
 async function boot() {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, storageKey: 'timeio-auth' } });
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await signedIn(session); else showLogin();
+  if (booting || userId) return;
+  booting = true;
+  try {
+    if (!window.supabase) { setSync('Offline – using phone copy'); return; }   // sign-in library not loaded yet
+    sb = sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, storageKey: 'timeio-auth' } });
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (session) await signedIn(session);
+    else if (localStorage.getItem('timeio-auth') && (error || !navigator.onLine)) setSync(pending ? 'Offline – will sync' : 'Offline – using phone copy');
+    else showLogin();
+  } catch (e) { setSync(pending ? 'Offline – will sync' : 'Offline – using phone copy'); }
+  finally { booting = false; }
+}
+function loadSupabase() {
+  if (window.supabase) return boot();
+  const sc = document.createElement('script');
+  sc.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  sc.onload = boot;
+  document.head.appendChild(sc);
 }
 
 async function signedIn(session) {
@@ -766,7 +783,11 @@ $('restoreFile').onchange = async e => {
   } catch (err) { alert('Could not restore: ' + err.message); }
 };
 // Fetch changes from other devices whenever the app comes back on screen, and every 30 s while it is open.
-const syncSoon = () => { if (!document.hidden && userId) syncNow(); };
+const syncSoon = () => {
+  if (document.hidden) return;
+  if (userId) syncNow();
+  else if (navigator.onLine && !$('login').classList.contains('show')) loadSupabase();   // came back online after starting offline
+};
 document.addEventListener('visibilitychange', syncSoon);
 window.addEventListener('pageshow', syncSoon);
 window.addEventListener('focus', syncSoon);
@@ -823,6 +844,7 @@ setTimeout(() => {
   setTimeout(() => splash.remove(), 600);
 }, 1600);
 boot();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
 </html>
