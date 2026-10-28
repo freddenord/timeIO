@@ -280,6 +280,15 @@ th:first-child,td:first-child{text-align:left}
               <option value="120">120 minutes</option>
             </select>
           </label>
+          <label><span>Ask about away time when this device sleeps or locks for</span>
+            <select id="setAway">
+              <option value="0">Off</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </label>
+          <p class="dim" style="margin-top:0">Set for this device only. Best left off on iPhone, which pauses the app whenever you switch to another one.</p>
           <label><span>Currency</span><input id="setCurrency" maxlength="6"></label>
         </div>
         <div class="panel">
@@ -327,6 +336,19 @@ th:first-child,td:first-child{text-align:left}
   </div>
 </div>
 
+<div class="modal" id="away">
+  <div class="panel">
+    <div class="dim mono">AWAY</div>
+    <h2 id="awayText" style="margin:6px 0 4px;font-size:22px">You were away</h2>
+    <div class="dim mono" id="awayInfo"></div>
+    <div class="actions">
+      <button class="btn primary" id="awayKeep">Keep the time</button>
+      <button class="btn" id="awayDrop">Discard, keep going</button>
+      <button class="btn danger" id="awayStop">Discard and stop</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="login">
   <div class="panel">
     <div class="dim mono">SIGN IN</div>
@@ -348,7 +370,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.9.0';   // bump this when you release a change
+const APP_VERSION = '1.10.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -442,9 +464,76 @@ function showPrompt() {
 }
 function hidePrompt() { $('prompt').classList.remove('show'); }
 
+// ---------- away time ----------
+// A heartbeat is written every second while the app runs. When the Mac sleeps or the app is
+// suspended, the heartbeat stops; a gap longer than the setting means the person was away.
+// The setting is per device, since the iPhone pauses the app whenever another app is in front.
+const AWAY_KEY = 'timeio.away', ALIVE_KEY = 'timeio.alive';
+const isTouch = matchMedia('(pointer: coarse)').matches;
+function awayMinutes() {
+  let v = null;
+  try { v = localStorage.getItem(AWAY_KEY); } catch (e) {}
+  return v === null ? (isTouch ? 0 : 10) : +v;
+}
+let lastAlive = 0;
+try { lastAlive = +localStorage.getItem(ALIVE_KEY) || 0; } catch (e) {}
+let away = null;   // { startedAt, from, to } while the question is open
+
+function checkAway(now) {
+  const r = state.running, mins = awayMinutes();
+  if (away) {
+    if (!r || r.startedAt !== away.startedAt) { away = null; $('away').classList.remove('show'); }   // timer changed on another device
+    return !!away;
+  }
+  const prev = lastAlive;
+  lastAlive = now;
+  try { localStorage.setItem(ALIVE_KEY, String(now)); } catch (e) {}
+  if (!r || !mins || !prev) return false;
+  const from = Math.max(prev, r.startedAt);
+  if (now - from < mins * 60000) return false;
+  away = { startedAt: r.startedAt, from, to: now };
+  showAway();
+  notify('You were away ' + hm((now - from) / 1000) + '. Keep or discard that time?');
+  return true;
+}
+function showAway() {
+  const t = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = projectById(state.running.projectId);
+  $('awayText').textContent = 'You were away ' + hm((away.to - away.from) / 1000);
+  $('awayInfo').textContent = t(new Date(away.from)) + '–' + t(new Date(away.to)) + ' · timer on ' + (p ? p.name : 'this project');
+  $('away').classList.add('show');
+}
+function closeAway() {
+  const a = away; away = null;
+  $('away').classList.remove('show');
+  lastAlive = Date.now();
+  try { localStorage.setItem(ALIVE_KEY, String(lastAlive)); } catch (e) {}
+  const r = state.running;
+  return r && a && r.startedAt === a.startedAt ? a : null;
+}
+$('awayKeep').onclick = () => {
+  const a = closeAway(); if (!a) return render();
+  const r = state.running;
+  if (r.promptAt) { r.promptAt = null; r.nextCheck = Date.now() + state.settings.interval * 60000; save(); hidePrompt(); }
+  renderTimer();
+};
+// Log the time before the break, then carry on from now with the same project, task and note.
+$('awayDrop').onclick = () => {
+  const a = closeAway(); if (!a) return render();
+  const { projectId, task, note } = state.running;
+  stopTimer(a.from, false);
+  const now = Date.now();
+  state.running = { projectId, task, note, startedAt: now, nextCheck: now + state.settings.interval * 60000, promptAt: null };
+  save(); render();
+};
+$('awayStop').onclick = () => {
+  const a = closeAway(); if (!a) return render();
+  stopTimer(a.from, false);
+};
+
 function tick() {
   const r = state.running;
-  if (r) {
+  if (r && !checkAway(Date.now())) {
     const now = Date.now();
     if (r.promptAt) {
       if (now >= r.promptAt + GRACE) stopTimer(r.promptAt, true);   // no answer: stop at the check-in time
@@ -455,7 +544,7 @@ function tick() {
       notify('Still working on ' + ((projectById(r.projectId) || {}).name || 'this project') + '?');
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     }
-  }
+  } else if (!r) checkAway(Date.now());
   renderTimer();
 }
 
@@ -686,6 +775,7 @@ $('projList').onclick = e => {
 };
 
 // ---------- settings ----------
+$('setAway').onchange = e => { try { localStorage.setItem(AWAY_KEY, e.target.value); } catch (x) {} };
 $('setInterval').onchange = e => { state.settings.interval = +e.target.value; save(); render(); };
 $('setCurrency').onchange = e => { state.settings.currency = e.target.value.trim() || 'SEK'; save(); render(); };
 $('backup').onclick = () => download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }), `timetracker-backup-${ymd(new Date())}.json`);
@@ -941,6 +1031,7 @@ function fillSelects() {
   $('logTask').innerHTML = '<option value="">All tasks</option>' + taskOpts;
   $('logTask').value = lt;
   $('setInterval').value = state.settings.interval;
+  $('setAway').value = awayMinutes();
   $('setCurrency').value = state.settings.currency;
 }
 // Today's entries, shown next to the timer and the manual form.
