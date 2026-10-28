@@ -593,6 +593,7 @@ $('logTask').onchange = render;
 
 // ---------- account & sync ----------
 const SUPABASE_URL = 'https://bsypbvllpijloanuafru.supabase.co';
+const APP_URL = 'https://freddenord.github.io/timeIO/';
 const SUPABASE_KEY = 'sb_publishable_7mHkzftoiuVkEW-dNuIcVw_-sLbbUYl';
 let sb = null, userId = null, syncTimer = null, pending = false, loginEmail = '';
 
@@ -600,7 +601,7 @@ function setSync(text) { $('syncText').textContent = text; }
 function showLogin() { $('login').classList.add('show'); setSync('Not signed in'); }
 
 async function boot() {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: 'implicit' } });
   const { data: { session } } = await sb.auth.getSession();
   if (session) await signedIn(session); else showLogin();
 }
@@ -648,11 +649,9 @@ $('sendCode').onclick = async () => {
   loginEmail = $('loginEmail').value.trim();
   if (!loginEmail) return;
   $('loginMsg').textContent = 'Sending…';
-  const { error } = await sb.auth.signInWithOtp({ email: loginEmail, options: { shouldCreateUser: true } });
+  const { error } = await sb.auth.signInWithOtp({ email: loginEmail, options: { shouldCreateUser: true, emailRedirectTo: APP_URL } });
   if (error) { $('loginMsg').textContent = error.message; return; }
-  $('loginStep1').hidden = true; $('loginStep2').hidden = false;
-  $('loginMsg').textContent = 'Code sent to ' + loginEmail;
-  $('loginCode').focus();
+  $('loginMsg').textContent = 'Check ' + loginEmail + ' and tap the sign-in link on this phone.';
 };
 $('verifyCode').onclick = async () => {
   const { data, error } = await sb.auth.verifyOtp({ email: loginEmail, token: $('loginCode').value.trim(), type: 'email' });
