@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#0b0d0b">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>timetracker</title>
 <style>
 :root{--bg:#0b0d0b;--panel:#131713;--line:#22291f;--text:#d8e6d2;--dim:#6f7d69;--led:#39ff88;--amber:#ffb000;--red:#ff4d4d}
@@ -27,10 +28,34 @@ header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:
 .led.blink:nth-child(3n){animation-delay:.4s}
 @keyframes blink{50%{opacity:.2}}
 main{padding:16px;max-width:560px;margin:0 auto}
-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:560px;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
-nav button{flex:1;padding:14px 0 16px;background:none;border:0;color:var(--dim);font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase;transition:color .15s}
+/* Phone: tab bar along the bottom. Wide screen (Mac): sidebar on the left, see the media query below. */
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 0 10px;background:none;border:0;color:var(--dim);font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;transition:color .15s}
+nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 nav button:active{transform:scale(.94)}
 nav button.active{color:var(--led);text-shadow:0 0 8px rgba(57,255,136,.6)}
+nav button.active svg{filter:drop-shadow(0 0 4px rgba(57,255,136,.6))}
+.pagehead{display:none}
+.cols{display:block}
+@media (min-width:900px){
+  body{padding-bottom:0}
+  .shell{display:grid;grid-template-columns:210px 1fr;min-height:calc(100vh - 63px)}
+  nav{position:sticky;top:0;align-self:start;height:calc(100vh - 63px);flex-direction:column;gap:2px;padding:16px 10px;background:none;border-top:0;border-right:1px solid var(--line)}
+  nav button{flex:none;flex-direction:row;gap:12px;padding:11px 14px;border-radius:9px;font-size:12px;letter-spacing:.08em}
+  nav button:hover{color:var(--text);background:#121612}
+  nav button.active{background:var(--panel);box-shadow:inset 2px 0 0 var(--led)}
+  nav svg{width:18px;height:18px}
+  main{max-width:1180px;width:100%;margin:0;padding:24px 32px}
+  .pagehead{display:block;margin:0 0 18px;font:700 22px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase}
+  .pagehead b{color:var(--led);text-shadow:0 0 8px rgba(57,255,136,.5)}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+  .cols.side{grid-template-columns:340px minmax(0,1fr)}
+  .cols.proj{grid-template-areas:'form list' 'tasks list';grid-template-rows:auto 1fr}
+  .cols.proj>.panel{margin-bottom:0}
+  .cols>div>.panel:last-child{margin-bottom:0}
+  .sticky{position:sticky;top:24px}
+  .clock{font-size:84px;margin:24px 0 8px}
+}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
 h3{margin:0 0 12px;font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--dim);text-transform:uppercase}
 label{display:block;margin-bottom:10px}
@@ -93,60 +118,104 @@ th:first-child,td:first-child{text-align:left}
   <span class="dim mono" id="syncText" style="margin-left:auto;font-size:11px"></span>
 </header>
 
+<div class="shell">
+  <nav>
+    <button data-tab="timer"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg><span>Timer</span></button>
+    <button data-tab="manual"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg><span>Manual</span></button>
+    <button data-tab="log"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg><span>Log</span></button>
+    <button data-tab="invoice"><svg viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6zM14 2v5h5M9 13h7M9 17h5"/></svg><span>Invoice</span></button>
+    <button data-tab="projects"><svg viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11H3z"/></svg><span>Projects</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Settings</span></button>
+  </nav>
+
 <main>
 
   <section data-tab="timer">
-    <div class="panel">
-      <h3>Timer</h3>
-      <label><span>Project</span>
-        <select id="timerProject"></select>
-      </label>
-      <label><span>Task</span>
-        <select id="timerTask"></select>
-      </label>
-      <label><span>Note (optional)</span>
-        <input id="timerNote" placeholder="e.g. Client meeting, grading">
-      </label>
-      <div class="clock" id="clock">00:00:00</div>
-      <div class="dim center" id="timerInfo">Idle</div>
-      <div class="bar"><i id="nextBar"></i></div>
-      <div class="dim center mono" id="nextInfo" style="margin-top:6px"></div>
-      <button class="btn primary wide" id="startBtn">Start timer</button>
-    </div>
-
-    <div class="panel">
-      <h3>Manual entry</h3>
-      <label><span>Date</span><input type="date" id="manualDate"></label>
-      <label><span>Project</span><select id="manualProject"></select></label>
-      <label><span>Task</span><select id="manualTask"></select></label>
-      <div style="display:flex;gap:10px">
-        <label style="flex:1"><span>Start</span><select id="manualStart"></select></label>
-        <label style="flex:1"><span>End</span><select id="manualEnd"></select></label>
+    <h1 class="pagehead">Timer</h1>
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h3>Timer</h3>
+          <label><span>Project</span>
+            <select id="timerProject"></select>
+          </label>
+          <label><span>Task</span>
+            <select id="timerTask"></select>
+          </label>
+          <label><span>Note (optional)</span>
+            <input id="timerNote" placeholder="e.g. Client meeting, grading">
+          </label>
+          <div class="clock" id="clock">00:00:00</div>
+          <div class="dim center" id="timerInfo">Idle</div>
+          <div class="bar"><i id="nextBar"></i></div>
+          <div class="dim center mono" id="nextInfo" style="margin-top:6px"></div>
+          <button class="btn primary wide" id="startBtn">Start timer</button>
+        </div>
       </div>
-      <div class="dim mono" id="manualSpent" style="margin:-2px 0 10px"></div>
-      <label><span>Note</span><input id="manualNote" placeholder="What did you do?"></label>
-      <button class="btn wide" id="addManual">Add to log</button>
+      <div>
+        <div class="panel" style="padding-top:8px">
+          <div class="total" style="padding:6px 0 4px"><span>Today</span><span class="today-total"></span></div>
+          <div class="today-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section data-tab="manual" hidden>
+    <h1 class="pagehead">Manual log</h1>
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h3>Add time by hand</h3>
+          <label><span>Date</span><input type="date" id="manualDate"></label>
+          <label><span>Project</span><select id="manualProject"></select></label>
+          <label><span>Task</span><select id="manualTask"></select></label>
+          <div style="display:flex;gap:10px">
+            <label style="flex:1"><span>Start</span><select id="manualStart"></select></label>
+            <label style="flex:1"><span>End</span><select id="manualEnd"></select></label>
+          </div>
+          <div class="dim mono" id="manualSpent" style="margin:-2px 0 10px"></div>
+          <label><span>Note</span><input id="manualNote" placeholder="What did you do?"></label>
+          <button class="btn primary wide" id="addManual">Add to log</button>
+        </div>
+      </div>
+      <div>
+        <div class="panel" style="padding-top:8px">
+          <div class="total" style="padding:6px 0 4px"><span>Today</span><span class="today-total"></span></div>
+          <div class="today-list"></div>
+        </div>
+      </div>
     </div>
   </section>
 
   <section data-tab="log" hidden>
-    <div class="panel">
-      <h3>Filter</h3>
-      <label><span>Project</span><select id="logProject"></select></label>
-      <label><span>Task</span><select id="logTask"></select></label>
-      <label><span>Month</span><input type="month" id="logMonth"></label>
-      <div class="total"><span>Total</span><span id="logTotal"></span></div>
-    </div>
-    <div class="panel" style="padding-top:8px">
-      <div id="logList"></div>
+    <h1 class="pagehead">Log</h1>
+    <div class="cols side">
+      <div class="sticky">
+        <div class="panel">
+          <h3>Filter</h3>
+          <label><span>Project</span><select id="logProject"></select></label>
+          <label><span>Task</span><select id="logTask"></select></label>
+          <label><span>Month</span><input type="month" id="logMonth"></label>
+          <div class="total"><span>Total</span><span id="logTotal"></span></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel" style="padding-top:8px">
+          <div id="logList"></div>
+        </div>
+      </div>
     </div>
   </section>
 
   <section data-tab="invoice" hidden>
+    <h1 class="pagehead">Invoice</h1>
     <div class="panel">
       <h3>Invoice summary</h3>
-      <label><span>Project</span><select id="invProject"></select></label>
-      <label><span>Period</span><input type="month" id="invMonth"></label>
+      <div class="cols">
+        <label><span>Project</span><select id="invProject"></select></label>
+        <label><span>Period</span><input type="month" id="invMonth"></label>
+      </div>
       <table>
         <thead><tr><th>Project</th><th>Hours</th><th>To invoice (h)</th><th>To invoice</th></tr></thead>
         <tbody id="invBody"></tbody>
@@ -160,72 +229,87 @@ th:first-child,td:first-child{text-align:left}
   </section>
 
   <section data-tab="projects" hidden>
-    <div class="panel">
-      <h3 id="projFormTitle">New project</h3>
-      <label><span>Project name</span><input id="projName" placeholder="Project name"></label>
-      <label><span>Client</span><input id="projClient" placeholder="Client name"></label>
-      <label><span>Hourly rate</span><input id="projRate" inputmode="decimal" placeholder="0"></label>
-      <div class="actions">
-        <button class="btn" id="cancelProject" hidden>Cancel</button>
-        <button class="btn primary" id="saveProject">Add project</button>
-      </div>
-    </div>
+    <h1 class="pagehead">Projects</h1>
+    <div class="cols proj">
+        <div class="panel" id="projForm" style="grid-area:form">
+          <h3 id="projFormTitle">New project</h3>
+          <label><span>Project name</span><input id="projName" placeholder="Project name"></label>
+          <label><span>Client</span><input id="projClient" placeholder="Client name"></label>
+          <label><span>Hourly rate</span><input id="projRate" inputmode="decimal" placeholder="0"></label>
+          <div class="actions">
+            <button class="btn" id="cancelProject" hidden>Cancel</button>
+            <button class="btn primary" id="saveProject">Add project</button>
+          </div>
+        </div>
 
-    <div class="panel" style="padding-top:8px">
-      <h3>Projects</h3>
-      <div id="projList"></div>
+        <div class="panel" style="padding-top:8px;grid-area:list">
+          <h3 style="margin-top:8px">Projects</h3>
+          <div id="projList"></div>
+        </div>
+        <div class="panel" style="padding-top:8px;grid-area:tasks">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            <h3 style="margin:0">Tasks</h3>
+            <button class="link" id="taskEditToggle">edit</button>
+          </div>
+          <div style="display:flex;gap:8px;margin:12px 0">
+            <input id="newTask" placeholder="New task name" style="flex:1">
+            <button class="btn primary" id="addTask">Add</button>
+          </div>
+          <div id="taskList"></div>
+          <p class="dim">Tasks appear in the dropdown in this order. Deleting a task keeps its name on past entries.</p>
+        </div>
     </div>
+  </section>
 
-    <div class="panel" style="padding-top:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-        <h3 style="margin:0">Tasks</h3>
-        <button class="link" id="taskEditToggle">edit</button>
+  <section data-tab="settings" hidden>
+    <h1 class="pagehead">Settings</h1>
+    <div class="cols">
+      <div>
+        <div class="panel">
+          <h3>Timer</h3>
+          <label><span>Check-in reminder every</span>
+            <select id="setInterval">
+              <option value="0">Off</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+              <option value="90">90 minutes</option>
+              <option value="120">120 minutes</option>
+            </select>
+          </label>
+          <label><span>Currency</span><input id="setCurrency" maxlength="6"></label>
+        </div>
+        <div class="panel">
+          <h3>Data</h3>
+          <div class="actions" style="margin-top:0">
+            <button class="btn" id="syncBtn">Sync now</button>
+            <button class="btn" id="backup">Download backup</button>
+            <button class="btn" id="restoreBtn">Restore backup</button>
+            <input type="file" id="restoreFile" accept="application/json" hidden>
+          </div>
+          <p class="dim" style="margin-bottom:0">Your data is saved to your timetracker account and syncs between your devices. Download a backup now and then.</p>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;margin:12px 0">
-        <input id="newTask" placeholder="New task name" style="flex:1">
-        <button class="btn primary" id="addTask">Add</button>
+      <div>
+        <div class="panel">
+          <h3>Account</h3>
+          <label><span>Password for this app (set once, then sign in without email)</span>
+            <input id="newPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters">
+          </label>
+          <div class="actions">
+            <button class="btn" id="setPassword">Save password</button>
+            <button class="btn danger" id="signOut">Sign out</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>About</h3>
+          <p class="dim mono" id="aboutVer" style="margin:0"></p>
+        </div>
       </div>
-      <div id="taskList"></div>
-      <p class="dim">Tasks appear in the dropdown in this order. Deleting a task keeps its name on past entries.</p>
-    </div>
-
-    <div class="panel">
-      <h3>Settings</h3>
-      <label><span>Check-in reminder every</span>
-        <select id="setInterval">
-          <option value="0">Off</option>
-          <option value="30">30 minutes</option>
-          <option value="60">60 minutes</option>
-          <option value="90">90 minutes</option>
-          <option value="120">120 minutes</option>
-        </select>
-      </label>
-      <label><span>Currency</span><input id="setCurrency" maxlength="6"></label>
-      <div class="actions">
-        <button class="btn" id="syncBtn">Sync now</button>
-        <button class="btn" id="backup">Download backup</button>
-        <button class="btn" id="restoreBtn">Restore backup</button>
-        <input type="file" id="restoreFile" accept="application/json" hidden>
-      </div>
-      <label><span>Password for this app (set once, then sign in without email)</span>
-        <input id="newPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters">
-      </label>
-      <div class="actions">
-        <button class="btn" id="setPassword">Save password</button>
-        <button class="btn danger" id="signOut">Sign out</button>
-      </div>
-      <p class="dim">Your data is saved to your timetracker account and syncs between your devices. Download a backup now and then.</p>
     </div>
   </section>
 
 </main>
-
-<nav>
-  <button data-tab="timer" class="active">Timer</button>
-  <button data-tab="log">Log</button>
-  <button data-tab="invoice">Invoice</button>
-  <button data-tab="projects">Projects</button>
-</nav>
+</div>
 
 <div class="modal" id="prompt">
   <div class="panel">
@@ -260,7 +344,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.7.0';   // bump this when you release a change
+const APP_VERSION = '1.8.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -304,9 +388,14 @@ function notify(body) {
 }
 
 // ---------- tabs ----------
+// The last tab used is remembered on this device.
+const TAB_KEY = 'timeio.tab';
 function showTab(name) {
+  if (!document.querySelector(`section[data-tab="${name}"]`)) name = 'timer';
   document.querySelectorAll('section[data-tab]').forEach(s => s.hidden = s.dataset.tab !== name);
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
+  window.scrollTo(0, 0);
   render();
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -464,7 +553,7 @@ function renderLog() {
     html += `<div class="row">
       <div style="min-width:0">
         <div>${esc(p ? p.name : '(deleted project)')}${e.auto ? '<span class="tag amber">auto-stopped</span>' : ''}${e.manual ? '<span class="tag">manual</span>' : ''}</div>
-        <div class="dim">${e.task ? esc(e.task) + ' · ' : ''}${e.start ? e.start + ' · ' : ''}${esc(e.note)}</div>
+        <div class="dim">${[esc(e.task), e.start, esc(e.note)].filter(Boolean).join(' · ')}</div>
       </div>
       <div style="text-align:right;white-space:nowrap">
         <div class="mono">${hm(e.seconds)}</div>
@@ -560,7 +649,7 @@ $('projList').onclick = e => {
     $('projFormTitle').textContent = 'Edit project';
     $('saveProject').textContent = 'Save changes';
     $('cancelProject').hidden = false;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('projForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   if (del) {
     const n = state.entries.filter(x => x.projectId === del).length;
@@ -828,8 +917,26 @@ function fillSelects() {
   $('setInterval').value = state.settings.interval;
   $('setCurrency').value = state.settings.currency;
 }
+// Today's entries, shown next to the timer and the manual form.
+function renderToday() {
+  const today = ymd(new Date());
+  const list = state.entries.filter(e => e.date === today).sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+  const secs = list.reduce((n, e) => n + e.seconds, 0);
+  const html = list.map(e => {
+    const p = projectById(e.projectId);
+    return `<div class="row">
+      <div style="min-width:0">
+        <div>${esc(p ? p.name : '(deleted project)')}${e.auto ? '<span class="tag amber">auto-stopped</span>' : ''}${e.manual ? '<span class="tag">manual</span>' : ''}</div>
+        <div class="dim">${[esc(e.task), e.start, esc(e.note)].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div class="mono" style="white-space:nowrap">${hm(e.seconds)}</div>
+    </div>`;
+  }).join('') || '<p class="dim">Nothing logged today yet.</p>';
+  document.querySelectorAll('.today-list').forEach(el => el.innerHTML = html);
+  document.querySelectorAll('.today-total').forEach(el => el.textContent = hm(secs));
+}
 function render() {
-  fillSelects(); renderTimer(); renderLog(); renderInvoice(); renderProjects(); renderTasks();
+  fillSelects(); renderTimer(); renderToday(); renderLog(); renderInvoice(); renderProjects(); renderTasks();
 }
 
 // ---------- init ----------
@@ -841,9 +948,12 @@ for (let i = 0; i < 6; i++) {
 }
 $('manualDate').value = ymd(new Date());
 setInterval(tick, 1000);
-showTab('timer');
+let startTab = 'timer';
+try { startTab = localStorage.getItem(TAB_KEY) || 'timer'; } catch (e) {}
+showTab(startTab);
 tick();
 $('appVer').textContent = 'Version ' + APP_VERSION;
+$('aboutVer').textContent = 'timetracker · version ' + APP_VERSION;
 setTimeout(() => {
   const splash = $('splash');
   splash.classList.add('hide');
