@@ -202,7 +202,11 @@ th:first-child,td:first-child{text-align:left}
         <button class="btn" id="restoreBtn">Restore backup</button>
         <input type="file" id="restoreFile" accept="application/json" hidden>
       </div>
+      <label><span>Password for this app (set once, then sign in without email)</span>
+        <input id="newPassword" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters">
+      </label>
       <div class="actions">
+        <button class="btn" id="setPassword">Save password</button>
         <button class="btn danger" id="signOut">Sign out</button>
       </div>
       <p class="dim">Your data is saved to your timeIO account and syncs between your devices. Download a backup now and then.</p>
@@ -236,7 +240,9 @@ th:first-child,td:first-child{text-align:left}
     <h2 style="margin:6px 0 12px;font-size:22px">time<b style="color:var(--led)">IO</b></h2>
     <div id="loginStep1">
       <label><span>Email</span><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
-      <button class="btn primary wide" id="sendCode">Send sign-in code</button>
+      <label><span>Password</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
+      <button class="btn primary wide" id="passwordSignIn">Sign in</button>
+      <button class="btn wide" id="sendCode">Email me a sign-in link instead</button>
     </div>
     <div id="loginStep2" hidden>
       <p class="dim">Enter the 6-digit code we emailed you.</p>
@@ -601,7 +607,7 @@ function setSync(text) { $('syncText').textContent = text; }
 function showLogin() { $('login').classList.add('show'); setSync('Not signed in'); }
 
 async function boot() {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: 'implicit' } });
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, storageKey: 'timeio-auth' } });
   const { data: { session } } = await sb.auth.getSession();
   if (session) await signedIn(session); else showLogin();
 }
@@ -645,6 +651,22 @@ async function pushNow() {
   if (pending) syncTimer = setTimeout(pushNow, 1500);
 }
 
+$('passwordSignIn').onclick = async () => {
+  const email = $('loginEmail').value.trim(), password = $('loginPassword').value;
+  if (!email || !password) { $('loginMsg').textContent = 'Enter your email and password.'; return; }
+  $('loginMsg').textContent = 'Signing in…';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) { $('loginMsg').textContent = 'Wrong email or password. Use the email link once to get in, then set a password in Settings.'; return; }
+  await signedIn(data.session);
+};
+$('setPassword').onclick = async () => {
+  const pw = $('newPassword').value;
+  if (pw.length < 8) return alert('Use at least 8 characters.');
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if (error) return alert('Could not save: ' + error.message);
+  $('newPassword').value = '';
+  alert('Password saved. Next time, sign in with your email and this password.');
+};
 $('sendCode').onclick = async () => {
   loginEmail = $('loginEmail').value.trim();
   if (!loginEmail) return;
