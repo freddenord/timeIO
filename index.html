@@ -260,7 +260,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.6.0';   // bump this when you release a change
+const APP_VERSION = '1.7.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -424,11 +424,17 @@ function renderManualSpent() {
   let opts = '';
   for (let m = 0; m < 24 * 60; m += 15) { const t = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; opts += `<option value="${t}">${t}</option>`; }
   $('manualStart').innerHTML = opts; $('manualEnd').innerHTML = opts;
-  $('manualStart').value = '09:00'; $('manualEnd').value = '10:00';
 })();
+// Start defaults to the current time (nearest 15 minutes), End to one hour later.
+function setManualTimesToNow() {
+  const now = new Date(), m = Math.round((now.getHours() * 60 + now.getMinutes()) / 15) * 15 % (24 * 60);
+  const t = x => `${pad(Math.floor(x / 60))}:${pad(x % 60)}`;
+  $('manualStart').value = t(m); $('manualEnd').value = t((m + 60) % (24 * 60));
+  renderManualSpent();
+}
 $('manualStart').onchange = renderManualSpent;
 $('manualEnd').onchange = renderManualSpent;
-renderManualSpent();
+setManualTimesToNow();
 $('addManual').onclick = () => {
   const pid = $('manualProject').value, date = $('manualDate').value;
   const secs = manualSeconds();
@@ -437,7 +443,7 @@ $('addManual').onclick = () => {
   if (!secs) return alert('Pick an end time after the start time.');
   state.entries.push({ id: uid(), projectId: pid, task: $('manualTask').value, date, start: $('manualStart').value, seconds: secs, note: $('manualNote').value.trim(), invoiced: false, auto: false, manual: true });
   save();
-  $('manualNote').value = '';
+  $('manualNote').value = ''; setManualTimesToNow();
   render();
 };
 
