@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="timeIO">
+<meta name="apple-mobile-web-app-title" content="timetracker">
 <meta name="theme-color" content="#0b0d0b">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
-<title>timeIO</title>
+<title>timetracker</title>
 <style>
 :root{--bg:#0b0d0b;--panel:#131713;--line:#22291f;--text:#d8e6d2;--dim:#6f7d69;--led:#39ff88;--amber:#ffb000;--red:#ff4d4d}
 *{box-sizing:border-box}
@@ -81,13 +81,13 @@ th:first-child,td:first-child{text-align:left}
 <body>
 <div id="splash">
   <img src="logo-button.png" alt="">
-  <div class="logo">time<b>IO</b></div>
+  <div class="logo">time<b>tracker</b></div>
   <div class="ver" id="appVer"></div>
 </div>
 
 <header>
   <img class="logo-art" src="logo-button.png" alt="">
-  <span class="logo">time<b>IO</b></span>
+  <span class="logo">time<b>tracker</b></span>
   <div class="leds" id="leds"></div>
   <span class="dim mono" id="statusText"></span>
   <span class="dim mono" id="syncText" style="margin-left:auto;font-size:11px"></span>
@@ -98,11 +98,11 @@ th:first-child,td:first-child{text-align:left}
   <section data-tab="timer">
     <div class="panel">
       <h3>Timer</h3>
-      <label><span>Task</span>
-        <select id="timerTask"></select>
-      </label>
       <label><span>Project</span>
         <select id="timerProject"></select>
+      </label>
+      <label><span>Task</span>
+        <select id="timerTask"></select>
       </label>
       <label><span>Note (optional)</span>
         <input id="timerNote" placeholder="e.g. Client meeting, grading">
@@ -117,9 +117,13 @@ th:first-child,td:first-child{text-align:left}
     <div class="panel">
       <h3>Manual entry</h3>
       <label><span>Date</span><input type="date" id="manualDate"></label>
-      <label><span>Task</span><select id="manualTask"></select></label>
       <label><span>Project</span><select id="manualProject"></select></label>
-      <label><span>Hours (1.5 or 1:30)</span><input id="manualHours" inputmode="decimal" placeholder="1.5"></label>
+      <label><span>Task</span><select id="manualTask"></select></label>
+      <div style="display:flex;gap:10px">
+        <label style="flex:1"><span>Start</span><select id="manualStart"></select></label>
+        <label style="flex:1"><span>End</span><select id="manualEnd"></select></label>
+      </div>
+      <div class="dim mono" id="manualSpent" style="margin:-2px 0 10px"></div>
       <label><span>Note</span><input id="manualNote" placeholder="What did you do?"></label>
       <button class="btn wide" id="addManual">Add to log</button>
     </div>
@@ -210,7 +214,7 @@ th:first-child,td:first-child{text-align:left}
         <button class="btn" id="setPassword">Save password</button>
         <button class="btn danger" id="signOut">Sign out</button>
       </div>
-      <p class="dim">Your data is saved to your timeIO account and syncs between your devices. Download a backup now and then.</p>
+      <p class="dim">Your data is saved to your timetracker account and syncs between your devices. Download a backup now and then.</p>
     </div>
   </section>
 
@@ -238,7 +242,7 @@ th:first-child,td:first-child{text-align:left}
 <div class="modal" id="login">
   <div class="panel">
     <div class="dim mono">SIGN IN</div>
-    <h2 style="margin:6px 0 12px;font-size:22px">time<b style="color:var(--led)">IO</b></h2>
+    <h2 style="margin:6px 0 12px;font-size:22px">time<b style="color:var(--led)">tracker</b></h2>
     <div id="loginStep1">
       <label><span>Email</span><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
       <label><span>Password</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
@@ -287,12 +291,6 @@ const hm = s => { const m = Math.round(s / 60); return `${Math.floor(m / 60)}h $
 const money = n => n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + state.settings.currency;
 const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const projectById = id => state.projects.find(p => p.id === id);
-function parseHours(s) {
-  s = String(s).trim().replace(',', '.');
-  if (!s) return 0;
-  if (s.includes(':')) { const [h, m] = s.split(':'); return Math.round((+h || 0) * 3600 + (+m || 0) * 60); }
-  const v = parseFloat(s); return v > 0 ? Math.round(v * 3600) : 0;
-}
 function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -301,7 +299,7 @@ function download(blob, name) {
 }
 function notify(body) {
   try {
-    if ('Notification' in window && Notification.permission === 'granted') new Notification('timeIO', { body });
+    if ('Notification' in window && Notification.permission === 'granted') new Notification('timetracker', { body });
   } catch (e) {}
 }
 
@@ -410,15 +408,36 @@ $('promptStop').onclick = () => stopTimer(Date.now(), false);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
 
 // ---------- manual entry ----------
+// Start and End are picked in 15-minute steps. An End earlier than Start means the work ran past midnight.
+const toMin = t => { const [h, m] = t.split(':'); return +h * 60 + +m; };
+function manualSeconds() {
+  let mins = toMin($('manualEnd').value) - toMin($('manualStart').value);
+  if (mins < 0) mins += 24 * 60;
+  return mins * 60;
+}
+function renderManualSpent() {
+  const secs = manualSeconds();
+  const overnight = toMin($('manualEnd').value) < toMin($('manualStart').value);
+  $('manualSpent').textContent = secs ? `Time spent: ${hm(secs)}${overnight ? ' (past midnight)' : ''}` : 'Start and end are the same';
+}
+(() => {
+  let opts = '';
+  for (let m = 0; m < 24 * 60; m += 15) { const t = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; opts += `<option value="${t}">${t}</option>`; }
+  $('manualStart').innerHTML = opts; $('manualEnd').innerHTML = opts;
+  $('manualStart').value = '09:00'; $('manualEnd').value = '10:00';
+})();
+$('manualStart').onchange = renderManualSpent;
+$('manualEnd').onchange = renderManualSpent;
+renderManualSpent();
 $('addManual').onclick = () => {
   const pid = $('manualProject').value, date = $('manualDate').value;
-  const secs = parseHours($('manualHours').value);
+  const secs = manualSeconds();
   if (!pid) return alert('Add a project first.');
   if (!date) return alert('Pick a date.');
-  if (!secs) return alert('Enter hours, e.g. 1.5 or 1:30.');
-  state.entries.push({ id: uid(), projectId: pid, task: $('manualTask').value, date, start: '', seconds: secs, note: $('manualNote').value.trim(), invoiced: false, auto: false, manual: true });
+  if (!secs) return alert('Pick an end time after the start time.');
+  state.entries.push({ id: uid(), projectId: pid, task: $('manualTask').value, date, start: $('manualStart').value, seconds: secs, note: $('manualNote').value.trim(), invoiced: false, auto: false, manual: true });
   save();
-  $('manualHours').value = ''; $('manualNote').value = '';
+  $('manualNote').value = '';
   render();
 };
 
@@ -495,7 +514,7 @@ $('exportCsv').onclick = () => {
   });
   const pid = $('invProject').value, month = $('invMonth').value;
   const pname = pid && projectById(pid) ? '-' + projectById(pid).name.replace(/\W+/g, '_') : '';
-  download(new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `timeio-${month || 'all'}${pname}.csv`);
+  download(new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `timetracker-${month || 'all'}${pname}.csv`);
 };
 
 // ---------- projects ----------
@@ -548,7 +567,7 @@ $('projList').onclick = e => {
 // ---------- settings ----------
 $('setInterval').onchange = e => { state.settings.interval = +e.target.value; save(); render(); };
 $('setCurrency').onchange = e => { state.settings.currency = e.target.value.trim() || 'SEK'; save(); render(); };
-$('backup').onclick = () => download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }), `timeio-backup-${ymd(new Date())}.json`);
+$('backup').onclick = () => download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }), `timetracker-backup-${ymd(new Date())}.json`);
 
 // ---------- tasks ----------
 let taskEdit = false;
@@ -740,7 +759,7 @@ $('restoreFile').onchange = async e => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    if (!Array.isArray(data.projects) || !Array.isArray(data.entries)) throw new Error('this is not a timeIO backup');
+    if (!Array.isArray(data.projects) || !Array.isArray(data.entries)) throw new Error('this is not a timetracker backup');
     if (!confirm(`Restore ${data.entries.length} entries from this backup? It replaces the current data.`)) return;
     state = Object.assign(freshState(), data);
     save(); render();
