@@ -312,6 +312,11 @@ th:first-child,td:first-child{text-align:left}
             <button class="btn" id="setPassword">Save password</button>
             <button class="btn danger" id="signOut">Sign out</button>
           </div>
+          <div id="passkeySettings" hidden>
+            <p class="dim" style="margin:16px 0 8px">Sign in with <span class="bioName">Face ID</span> instead of a password. Set it up once; iCloud Keychain shares it between your iPhone and Mac.</p>
+            <div id="passkeyList" class="dim mono"></div>
+            <div class="actions"><button class="btn" id="addPasskey">Set up <span class="bioName">Face ID</span></button></div>
+          </div>
         </div>
         <div class="panel">
           <h3>About</h3>
@@ -354,6 +359,10 @@ th:first-child,td:first-child{text-align:left}
     <div class="dim mono">SIGN IN</div>
     <h2 style="margin:6px 0 12px;font-size:22px">time<b style="color:var(--led)">tracker</b></h2>
     <div id="loginStep1">
+      <div id="passkeyBox" hidden>
+        <button class="btn primary wide" id="passkeySignIn">Sign in with <span class="bioName">Face ID</span></button>
+        <p class="dim" style="margin:8px 0 14px">Or use your email:</p>
+      </div>
       <label><span>Email</span><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
       <label><span>Password</span><input id="loginPassword" type="password" autocomplete="current-password"></label>
       <button class="btn primary wide" id="passwordSignIn">Sign in</button>
@@ -370,7 +379,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.10.0';   // bump this when you release a change
+const APP_VERSION = '1.11.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -851,7 +860,7 @@ async function boot() {
   booting = true;
   try {
     if (!window.supabase) { setSync('Offline – using phone copy'); return; }   // sign-in library not loaded yet
-    sb = sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, storageKey: 'timeio-auth' } });
+    sb = sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, storageKey: 'timeio-auth', experimental: { passkey: true } } });
     const { data: { session }, error } = await sb.auth.getSession();
     if (session) await signedIn(session);
     else if (localStorage.getItem('timeio-auth') && (error || !navigator.onLine)) setSync(pending ? 'Offline – will sync' : 'Offline – using phone copy');
@@ -870,6 +879,7 @@ function loadSupabase() {
 async function signedIn(session) {
   userId = session.user.id;
   $('login').classList.remove('show');
+  showPasskeys();
   await syncNow();
 }
 
@@ -951,6 +961,55 @@ $('passwordSignIn').onclick = async () => {
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) { $('loginMsg').textContent = 'Wrong email or password. Use the email link once to get in, then set a password in Settings.'; return; }
   await signedIn(data.session);
+};
+// Face ID / Touch ID sign-in uses passkeys: the device keeps a key that only unlocks with your face or finger.
+const canPasskey = !!window.PublicKeyCredential;
+const ua = navigator.userAgent;
+const bioName = /iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'Face ID' : /Mac/.test(ua) ? 'Touch ID' : 'a passkey';
+document.querySelectorAll('.bioName').forEach(el => el.textContent = bioName);
+$('passkeyBox').hidden = !canPasskey;
+function passkeyError(error) {
+  if (error.code === 'passkey_disabled') return bioName + ' sign-in is not switched on for the account yet.';
+  if (error.code === 'webauthn_credential_not_found') return 'This ' + bioName + ' key is not linked to your account. Sign in with your email, then set it up in Settings.';
+  if (/cancel|abort|not allowed/i.test(error.message || '')) return 'Cancelled.';
+  return error.message || String(error);
+}
+async function showPasskeys() {
+  if (!canPasskey || !sb.auth.passkey) return;
+  const { data, error } = await sb.auth.passkey.list();
+  if (error) { $('passkeySettings').hidden = error.code === 'passkey_disabled'; return; }
+  $('passkeySettings').hidden = false;
+  const list = $('passkeyList');
+  list.textContent = data.length ? '' : 'Not set up yet.';
+  data.forEach(k => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;margin:4px 0';
+    row.textContent = '✓ ' + (k.friendly_name || 'Passkey') + ' · added ' + k.created_at.slice(0, 10);
+    const del = document.createElement('button');
+    del.className = 'btn'; del.textContent = 'Remove';
+    del.onclick = async () => {
+      if (!confirm('Remove this ' + bioName + ' sign-in? You can still sign in with your email and password.')) return;
+      const { error } = await sb.auth.passkey.delete({ passkeyId: k.id });
+      if (error) alert('Could not remove: ' + error.message);
+      showPasskeys();
+    };
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+$('passkeySignIn').onclick = async () => {
+  if (!sb) return;
+  $('loginMsg').textContent = 'Waiting for ' + bioName + '…';
+  const { data, error } = await sb.auth.signInWithPasskey();
+  if (error) { $('loginMsg').textContent = passkeyError(error); return; }
+  $('loginMsg').textContent = '';
+  await signedIn(data.session);
+};
+$('addPasskey').onclick = async () => {
+  const { error } = await sb.auth.registerPasskey();
+  if (error) return alert(error.code === 'webauthn_credential_exists' ? bioName + ' is already set up on this device.' : 'Could not set up ' + bioName + ': ' + passkeyError(error));
+  alert(bioName + ' is set up. Next time you sign in, tap "Sign in with ' + bioName + '".');
+  showPasskeys();
 };
 $('setPassword').onclick = async () => {
   const pw = $('newPassword').value;
