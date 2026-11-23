@@ -374,12 +374,14 @@ th:first-child,td:first-child{text-align:left}
       <button class="btn primary wide" id="verifyCode">Sign in</button>
     </div>
     <p class="dim" id="loginMsg"></p>
+    <button class="btn wide" id="loginLater">Continue offline</button>
+    <p class="dim" style="margin-bottom:0">Your logs stay saved on this device and upload after you sign in. Tap the sync status at the top to sign in later.</p>
   </div>
 </div>
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.11.0';   // bump this when you release a change
+const APP_VERSION = '1.11.1';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -1019,6 +1021,7 @@ $('setPassword').onclick = async () => {
   $('newPassword').value = '';
   alert('Password saved. Next time, sign in with your email and this password.');
 };
+$('loginLater').onclick = () => { $('login').classList.remove('show'); setSync(pending ? 'Not signed in – will sync' : 'Not signed in'); };
 $('sendCode').onclick = async () => {
   loginEmail = $('loginEmail').value.trim();
   if (!loginEmail) return;
