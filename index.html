@@ -114,11 +114,13 @@ th:first-child,td:first-child{text-align:left}
   #printReport .sub{color:#555;margin:0 0 16px}
   #printReport table{width:100%;border-collapse:collapse}
   #printReport th,#printReport td{text-align:left;padding:5px 6px;border-bottom:1px solid #ddd}
-  #printReport th:not(:first-child),#printReport td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
-  #printReport tr.m td{font-weight:600;border-top:1px solid #999;background:#f3f3f3}
-  #printReport tr.p td:first-child{padding-left:18px}
-  #printReport tr.p td{color:#444}
-  #printReport tr.tot td{font-weight:700;border-top:2px solid #000}
+  #printReport th:nth-child(n+4),#printReport td:nth-child(n+4){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  #printReport td:nth-child(-n+2){white-space:nowrap;font-variant-numeric:tabular-nums}
+  #printReport tr.m td{font-weight:700;font-size:13px;border-bottom:1px solid #999;padding-top:14px}
+  #printReport tr.e td{color:#222}
+  #printReport tr.p td{color:#555;border-bottom:none}
+  #printReport tr.ms td{font-weight:600;background:#f3f3f3;border-top:1px solid #999}
+  #printReport tr.tot td{font-weight:700;border-top:2px solid #000;border-bottom:none;padding-top:10px}
   #printReport tr{break-inside:avoid}
 }
 </style>
@@ -257,7 +259,7 @@ th:first-child,td:first-child{text-align:left}
       <div class="actions">
         <button class="btn primary" id="monthPdf">Save as PDF</button>
       </div>
-      <p class="dim" style="margin-bottom:0">Opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
+      <p class="dim" style="margin-bottom:0">The PDF lists every time log, with month totals, for the project and period chosen at the top (leave Period empty for all months). It opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
     </div>
   </section>
 
@@ -410,7 +412,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.12.0';   // bump this when you release a change
+const APP_VERSION = '1.13.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -770,33 +772,41 @@ function renderMonths() {
   $('monthBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="dim">No entries yet.</td></tr>';
 }
 // PDF: build a plain white report and open the print window, where the system offers Save as PDF.
+// Covers the project and period chosen at the top of the Invoice tab (all months if no period).
 $('monthPdf').onclick = () => {
-  const pid = $('invProject').value, p = pid && projectById(pid), months = {};
-  state.entries.filter(e => !pid || e.projectId === pid).forEach(e => {
+  const pid = $('invProject').value, p = pid && projectById(pid), period = $('invMonth').value, months = {};
+  state.entries.filter(e => (!pid || e.projectId === pid) && (!period || e.date.startsWith(period))).forEach(e => {
     const k = e.date.slice(0, 7), q = projectById(e.projectId) || { name: '(deleted project)', rate: 0 };
-    const m = months[k] = months[k] || { secs: 0, amt: 0, projects: {} }, amt = e.seconds / 3600 * (q.rate || 0);
-    m.secs += e.seconds; m.amt += amt;
+    const m = months[k] = months[k] || { secs: 0, amt: 0, projects: {}, entries: [] }, amt = e.seconds / 3600 * (q.rate || 0);
+    m.secs += e.seconds; m.amt += amt; m.entries.push({ e, q, amt });
     const g = m.projects[q.name] = m.projects[q.name] || { secs: 0, amt: 0 };
     g.secs += e.seconds; g.amt += amt;
   });
   const keys = Object.keys(months).sort().reverse();
   if (!keys.length) return alert('Nothing to export in this view.');
   const fmt = k => new Date(k + '-01T12:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  const row = (cls, name, secs, amt) => `<tr class="${cls}"><td>${esc(name)}</td><td>${hm(secs)}</td><td>${(secs / 3600).toFixed(2).replace('.', ',')}</td><td>${money(amt)}</td></tr>`;
+  const dec = n => n.toFixed(2).replace('.', ',');
+  const endTime = e => { if (!e.start) return ''; const [h, mi] = e.start.split(':').map(Number), t = Math.round((h * 60 + mi + e.seconds / 60)) % 1440; return pad(Math.floor(t / 60)) + ':' + pad(t % 60); };
+  const sum = (cls, label, secs, amt) => `<tr class="${cls}"><td colspan="3">${esc(label)}</td><td>${hm(secs)}</td><td>${dec(secs / 3600)}</td><td>${money(amt)}</td></tr>`;
   let body = '', tot = { secs: 0, amt: 0 };
   keys.forEach(k => {
     const m = months[k]; tot.secs += m.secs; tot.amt += m.amt;
-    body += row('m', fmt(k), m.secs, m.amt);
-    if (!pid) Object.entries(m.projects).sort((a, b) => b[1].secs - a[1].secs).forEach(([n, g]) => { body += row('p', n, g.secs, g.amt); });
+    body += `<tr class="m"><td colspan="6">${fmt(k)}</td></tr>`;
+    m.entries.sort((x, y) => (x.e.date + (x.e.start || '')).localeCompare(y.e.date + (y.e.start || ''))).forEach(({ e, q, amt }) => {
+      const what = [pid ? '' : q.name, e.task, e.note].filter(Boolean).map(esc).join(' · ');
+      body += `<tr class="e"><td>${e.date}</td><td>${e.start ? e.start + '–' + endTime(e) : ''}</td><td class="w">${what}</td><td>${hm(e.seconds)}</td><td>${dec(e.seconds / 3600)}</td><td>${money(amt)}</td></tr>`;
+    });
+    if (!pid && Object.keys(m.projects).length > 1) Object.entries(m.projects).sort((a, b) => b[1].secs - a[1].secs).forEach(([n, g]) => { body += sum('p', n, g.secs, g.amt); });
+    body += sum('ms', fmt(k) + ' total', m.secs, m.amt);
   });
-  body += row('tot', 'Total', tot.secs, tot.amt);
+  if (keys.length > 1) body += sum('tot', 'Total', tot.secs, tot.amt);
   let r = $('printReport');
   if (!r) { r = document.createElement('div'); r.id = 'printReport'; document.body.appendChild(r); }
-  r.innerHTML = `<h1>Hours per month</h1>
-    <p class="sub">${p ? esc(p.name) + (p.client ? ' · ' + esc(p.client) : '') : 'All projects'} · ${fmt(keys[keys.length - 1])} – ${fmt(keys[0])} · created ${ymd(new Date())}</p>
-    <table><thead><tr><th>Month</th><th>Time</th><th>Hours</th><th>Amount</th></tr></thead><tbody>${body}</tbody></table>`;
+  r.innerHTML = `<h1>Time report</h1>
+    <p class="sub">${p ? esc(p.name) + (p.client ? ' · ' + esc(p.client) : '') : 'All projects'} · ${keys.length > 1 ? fmt(keys[keys.length - 1]) + ' – ' + fmt(keys[0]) : fmt(keys[0])} · created ${ymd(new Date())}</p>
+    <table><thead><tr><th>Date</th><th>Time</th><th>${pid ? 'Task · note' : 'Project · task · note'}</th><th>Duration</th><th>Hours</th><th>Amount</th></tr></thead><tbody>${body}</tbody></table>`;
   const old = document.title;
-  document.title = `timetracker-hours-per-month${p ? '-' + p.name.replace(/\W+/g, '_') : ''}`;   // suggested PDF file name
+  document.title = `timetracker-${period || 'all'}${p ? '-' + p.name.replace(/\W+/g, '_') : ''}`;   // suggested PDF file name
   window.print();
   setTimeout(() => { document.title = old; }, 1000);
 };
