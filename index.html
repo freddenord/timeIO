@@ -256,10 +256,11 @@ th:first-child,td:first-child{text-align:left}
         <thead><tr><th>Month</th><th>Time</th><th>Hours</th><th>Amount</th></tr></thead>
         <tbody id="monthBody"></tbody>
       </table>
+      <label><span>Month to export</span><select id="pdfMonth"></select></label>
       <div class="actions">
         <button class="btn primary" id="monthPdf">Save as PDF</button>
       </div>
-      <p class="dim" style="margin-bottom:0">The PDF lists every time log, with month totals, for the project and period chosen at the top (leave Period empty for all months). It opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
+      <p class="dim" style="margin-bottom:0">The PDF lists every time log, with month totals, for the month picked here and the project chosen at the top. It opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
     </div>
   </section>
 
@@ -412,7 +413,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.13.0';   // bump this when you release a change
+const APP_VERSION = '1.13.1';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -769,12 +770,15 @@ function renderMonths() {
     });
     return html;
   });
+  const sel = $('pdfMonth'), keep = sel.dataset.picked ?? ymd(new Date()).slice(0, 7);
+  sel.innerHTML = Object.keys(months).sort().reverse().map(k => `<option value="${k}">${fmt(k)}</option>`).join('') + '<option value="">All months</option>';
+  sel.value = [...sel.options].some(o => o.value === keep) ? keep : sel.options[0].value;
   $('monthBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="dim">No entries yet.</td></tr>';
 }
 // PDF: build a plain white report and open the print window, where the system offers Save as PDF.
-// Covers the project and period chosen at the top of the Invoice tab (all months if no period).
+// Covers the month picked next to the button and the project chosen at the top of the Invoice tab.
 $('monthPdf').onclick = () => {
-  const pid = $('invProject').value, p = pid && projectById(pid), period = $('invMonth').value, months = {};
+  const pid = $('invProject').value, p = pid && projectById(pid), period = $('pdfMonth').value, months = {};
   state.entries.filter(e => (!pid || e.projectId === pid) && (!period || e.date.startsWith(period))).forEach(e => {
     const k = e.date.slice(0, 7), q = projectById(e.projectId) || { name: '(deleted project)', rate: 0 };
     const m = months[k] = months[k] || { secs: 0, amt: 0, projects: {}, entries: [] }, amt = e.seconds / 3600 * (q.rate || 0);
@@ -810,6 +814,7 @@ $('monthPdf').onclick = () => {
   window.print();
   setTimeout(() => { document.title = old; }, 1000);
 };
+$('pdfMonth').onchange = () => { $('pdfMonth').dataset.picked = $('pdfMonth').value; };
 $('monthBody').onclick = e => {
   const tr = e.target.closest('[data-month]');
   if (tr) { $('invMonth').value = tr.dataset.month; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
