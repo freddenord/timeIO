@@ -1,6 +1,6 @@
 // Keeps a copy of the app on the phone so it opens without internet.
 // The app itself is fetched fresh when online; the saved copy is used only when offline.
-const CACHE = 'timeio-app-v6';
+const CACHE = 'timeio-app-v7';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 const FILES = ['./', './index.html', './apple-touch-icon.png', './icon-512.png', './logo-button.png', './icon-mac.png', './manifest.webmanifest', SUPABASE_JS];
 
@@ -18,7 +18,9 @@ self.addEventListener('activate', e => {
 function fromNetwork(req, ms) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout')), ms);
-    fetch(req).then(res => { clearTimeout(t); resolve(res); }, err => { clearTimeout(t); reject(err); });
+    // Own files: ask GitHub Pages for the newest copy, skipping the browser's 10-minute cache.
+    const sameSite = new URL(req.url).origin === location.origin;
+    (sameSite ? fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(req)).then(res => { clearTimeout(t); resolve(res); }, err => { clearTimeout(t); reject(err); });
   });
 }
 
