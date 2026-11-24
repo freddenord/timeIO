@@ -1,6 +1,6 @@
 // Keeps a copy of the app on the phone so it opens without internet.
 // The app itself is fetched fresh when online; the saved copy is used only when offline.
-const CACHE = 'timeio-app-v7';
+const CACHE = 'timeio-app-v8';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 const FILES = ['./', './index.html', './apple-touch-icon.png', './icon-512.png', './logo-button.png', './icon-mac.png', './manifest.webmanifest', SUPABASE_JS];
 
