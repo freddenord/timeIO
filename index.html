@@ -257,11 +257,15 @@ th:first-child,td:first-child{text-align:left}
         <thead><tr><th>Month</th><th>Time</th><th>Hours</th><th>Amount</th></tr></thead>
         <tbody id="monthBody"></tbody>
       </table>
-      <label><span>Month to export</span><select id="pdfMonth"></select></label>
+      <label><span>Period to export</span><select id="pdfMonth"></select></label>
+      <div class="cols">
+        <label><span>From</span><input type="date" id="pdfFrom"></label>
+        <label><span>To</span><input type="date" id="pdfTo"></label>
+      </div>
       <div class="actions">
         <button class="btn primary" id="monthPdf">Save as PDF</button>
       </div>
-      <p class="dim" style="margin-bottom:0">The PDF lists every time log, with month totals, for the month picked here and the project chosen at the top. It opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
+      <p class="dim" style="margin-bottom:0">The PDF lists every time log, with month totals, from the From date to the To date (both included) and for the project chosen at the top. Picking a month fills in the dates; change them for any other range. It opens the print window. On Mac choose PDF → Save as PDF. On iPhone, tap Share → Save to Files.</p>
     </div>
   </section>
 
@@ -414,7 +418,7 @@ th:first-child,td:first-child{text-align:left}
 
 <script>
 const KEY = 'timeio.v1';
-const APP_VERSION = '1.13.3';   // bump this when you release a change
+const APP_VERSION = '1.14.0';   // bump this when you release a change
 const GRACE = 5 * 60 * 1000;          // minutes to answer a check-in before auto-stop
 const $ = id => document.getElementById(id);
 
@@ -772,15 +776,25 @@ function renderMonths() {
     return html;
   });
   const sel = $('pdfMonth'), keep = sel.dataset.picked ?? ymd(new Date()).slice(0, 7);
-  sel.innerHTML = Object.keys(months).sort().reverse().map(k => `<option value="${k}">${fmt(k)}</option>`).join('') + '<option value="">All months</option>';
+  sel.innerHTML = Object.keys(months).sort().reverse().map(k => `<option value="${k}">${fmt(k)}</option>`).join('') + '<option value="">All months</option><option value="custom">Custom dates</option>';
   sel.value = [...sel.options].some(o => o.value === keep) ? keep : sel.options[0].value;
+  if (sel.value !== 'custom') fillPdfDates(sel.value);
   $('monthBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="dim">No entries yet.</td></tr>';
+}
+// A month fills From/To with its first and last day; "All months" clears them.
+function fillPdfDates(k) {
+  if (!k) { $('pdfFrom').value = $('pdfTo').value = ''; return; }
+  const [y, m] = k.split('-').map(Number);
+  $('pdfFrom').value = k + '-01';
+  $('pdfTo').value = k + '-' + pad(new Date(y, m, 0).getDate());
 }
 // PDF: build a plain white report and open the print window, where the system offers Save as PDF.
 // Covers the month picked next to the button and the project chosen at the top of the Invoice tab.
 $('monthPdf').onclick = () => {
-  const pid = $('invProject').value, p = pid && projectById(pid), period = $('pdfMonth').value, months = {};
-  state.entries.filter(e => (!pid || e.projectId === pid) && (!period || e.date.startsWith(period))).forEach(e => {
+  const pid = $('invProject').value, p = pid && projectById(pid), months = {};
+  let from = $('pdfFrom').value, to = $('pdfTo').value;
+  if (from && to && from > to) [from, to] = [to, from];
+  state.entries.filter(e => (!pid || e.projectId === pid) && (!from || e.date >= from) && (!to || e.date <= to)).forEach(e => {
     const k = e.date.slice(0, 7), q = projectById(e.projectId) || { name: '(deleted project)', rate: 0 };
     const m = months[k] = months[k] || { secs: 0, amt: 0, projects: {}, entries: [] }, amt = e.seconds / 3600 * (q.rate || 0);
     m.secs += e.seconds; m.amt += amt; m.entries.push({ e, q, amt });
@@ -805,17 +819,20 @@ $('monthPdf').onclick = () => {
     body += sum('ms', fmt(k) + ' total', m.secs, m.amt);
   });
   if (keys.length > 1) body += sum('tot', 'Total', tot.secs, tot.amt);
+  const pick = $('pdfMonth').value, isMonth = /^\d{4}-\d{2}$/.test(pick) && from === pick + '-01' && to && to.startsWith(pick);
+  const periodText = isMonth ? fmt(pick) : (from || to) ? `${from || keys[keys.length - 1] + '-01'} – ${to || ymd(new Date())}` : keys.length > 1 ? fmt(keys[keys.length - 1]) + ' – ' + fmt(keys[0]) : fmt(keys[0]);
   let r = $('printReport');
   if (!r) { r = document.createElement('div'); r.id = 'printReport'; document.body.appendChild(r); }
   r.innerHTML = `<h1>Time report</h1>
-    <p class="sub">${p ? esc(p.name) + (p.client ? ' · ' + esc(p.client) : '') : 'All projects'} · ${keys.length > 1 ? fmt(keys[keys.length - 1]) + ' – ' + fmt(keys[0]) : fmt(keys[0])} · created ${ymd(new Date())}</p>
+    <p class="sub">${p ? esc(p.name) + (p.client ? ' · ' + esc(p.client) : '') : 'All projects'} · ${periodText} · created ${ymd(new Date())}</p>
     <table><thead><tr><th>Date</th><th>Time</th><th>${pid ? 'Task · note' : 'Project · task · note'}</th><th>Duration</th><th>Hours</th></tr></thead><tbody>${body}</tbody></table>`;
   const old = document.title;
-  document.title = `timetracker-${period || 'all'}${p ? '-' + p.name.replace(/\W+/g, '_') : ''}`;   // suggested PDF file name
+  document.title = `timetracker-${isMonth ? pick : (from || to) ? (from || 'start') + '_' + (to || 'today') : 'all'}${p ? '-' + p.name.replace(/\W+/g, '_') : ''}`;   // suggested PDF file name
   window.print();
   setTimeout(() => { document.title = old; }, 1000);
 };
-$('pdfMonth').onchange = () => { $('pdfMonth').dataset.picked = $('pdfMonth').value; };
+$('pdfMonth').onchange = () => { const v = $('pdfMonth').value; $('pdfMonth').dataset.picked = v; if (v !== 'custom') fillPdfDates(v); };
+$('pdfFrom').onchange = $('pdfTo').onchange = () => { $('pdfMonth').value = $('pdfMonth').dataset.picked = 'custom'; };
 $('monthBody').onclick = e => {
   const tr = e.target.closest('[data-month]');
   if (tr) { $('invMonth').value = tr.dataset.month; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
